@@ -5,6 +5,7 @@ import sys
 
 from tkinter import filedialog
 import math
+
 #  --onefile BMPConverter.py
 # a tool to convert an image to SYSTEM VERILOG bitmap for Lab1 projects
 # writen by Noam and DAvid Bar-On  for the elementary lab in the Technion IIT 2021
@@ -36,9 +37,14 @@ global InvertGrayScale
 global InvertGrayScalebutton
 InvertGrayScale = TRUE
 
+global CropFlag
+CropFlag = None
+
+global NoResizeFlag
+NoResizeFlag = None
 
 global TL_BMP_Position
-TL_BMP_Position = (400,50)
+TL_BMP_Position = (500,50)
 Original_Position = (100,50)
 
 ## how to make an exe program
@@ -95,6 +101,8 @@ def selectmouse(v):
 
     BMPpicDisplay()
 
+def picModifyNoArgs():
+    picModify(0)
 
 def OpenGUIKeys():
     global bmpScale, ResizeScale
@@ -103,6 +111,10 @@ def OpenGUIKeys():
     global OneBitbutton
     global grayThreshold, Threshold_Label
     global InvertGrayScalebutton
+    global OriginalImageSize
+    global TopCrop, BottomCrop
+    global CropFlag
+    global NoResizeFlag
 
     # sliders
     bmpScale = Scale(root, from_=0, to=6, label="2^scale", variable=IntVar(), command=picModify)
@@ -113,12 +125,52 @@ def OpenGUIKeys():
     ResizeScale.set(0)
     ResizeScale.place(x=0, y=250)
 
+    NoResizeFlag = IntVar()
+    NoResizeButton = Checkbutton(root, variable=NoResizeFlag, onvalue = 1, offvalue = 0, text="Native Res", command=picModifyNoArgs)
+    NoResizeButton.place(x=10, y=60)
+
+    # Crop
+    CropFlag = IntVar()
+    CropButton = Checkbutton(root, variable=CropFlag, onvalue = 1, offvalue = 0, text="Auto Crop", command=picModifyNoArgs)
+    CropButton.place(x=250, y=320)
+
+    #Crop_Label = Label(root, text="Crop")
+    #Crop_Label.place(x=410, y=40)
+
+    #TopCrop = Scale(root, from_=0, to=256, variable=IntVar(), command=picModify)
+    #TopCrop.set(0)
+    #TopCrop.place(x=370, y=60)
+    #TopCrop_Label = Label(root, text="Top")
+    #TopCrop_Label.place(x=390, y=160)
+
+    #BottomCrop = Scale(root, from_=0, to=256, variable=IntVar(), command=picModify)
+    #BottomCrop.set(0)
+    #BottomCrop.place(x=430, y=60)
+    #BottomCrop_Label = Label(root, text="Bot")
+    #BottomCrop_Label.place(x=450, y=160)
+
+    #LeftCrop = Scale(root, from_=0, to=256, variable=IntVar(), command=picModify)
+    #LeftCrop.set(0)
+    #LeftCrop.place(x=370, y=205)
+    #LeftCrop_Label = Label(root, text="Left")
+    #LeftCrop_Label.place(x=390, y=185)
+
+    #RightCrop = Scale(root, from_=0, to=256, variable=IntVar(), command=picModify)
+    #RightCrop.set(0)
+    #RightCrop.place(x=430, y=205)
+    #RightCrop_Label = Label(root, text="Right")
+    #RightCrop_Label.place(x=445, y=185)
+
     # gray scale controls
     grayThreshold = Scale(root, from_=0, to=256, variable=IntVar(), command=picModify)
     grayThreshold.set(256)
     grayThreshold.place(x=550, y=350)
+
     Threshold_Label = Label(root, text="      off")
     Threshold_Label.place(x=550, y=470)
+
+    OriginalImageSize = Label(root, text="")
+    OriginalImageSize.place(x=200, y=30)
 
     InvertGrayScalebutton = Button(root, text="            ", command=InvertSelect)
     InvertGrayScalebutton.place(x=550, y=500)
@@ -195,11 +247,20 @@ def OpenGUIKeys():
     OneBitbutton = Button(root, text="{} bit (press for 1 bit)".format(bits), bg='green', command=SingleBitBitMapSelect)
     OneBitbutton.place(x=50, y=500)
 
+    NewImagebutton = Button(root, text="New image", bg='light blue', command=open_img)
+    NewImagebutton.place(x=50, y=550)
+
     SVFilebutton = Button(root, text="create SV file & exit", bg='light blue', command=writeVerilog)
     SVFilebutton.place(x=300, y=500)
 
     MIFFilebutton = Button(root, text="create MIF file", bg='light blue', command=writeMif)
     MIFFilebutton.place(x=300, y=550)
+
+    HEXFilebutton = Button(root, text="create readmemh file", bg='light blue', command=writeMem)
+    HEXFilebutton.place(x=450, y=550)
+
+    #HEXFilebutton = Button(root, text="create Intel HEX file", bg='light blue', command=writeIHex)
+    #HEXFilebutton.place(x=600, y=550)
 
 def RGBpicModify(dummy):
     global bitsR, bitsG, bitsB, bits
@@ -312,9 +373,6 @@ def writeVerilog():
             if j < (height - 1):
                 file1.write(",")
     file1.write("};\n")
-    xBitsDiv = str( math.trunc(math.log(width +1 )  / math.log( 2 ) ) -2 ) # add one to r0und up math errors  -2  to reach the  4*4
-    yBitsDiv = str( math.trunc(math.log(height +1 )  / math.log( 2 ) ) -2 )
-
     file1.close()
 
 
@@ -330,9 +388,8 @@ def writeMif():
     pixels = imgBMP.load()
     width, height = imgBMP.size
     OneBitPixelCode = (255, 0, 0)
-    file1 = open(FileName + "BitMap.mif", "w")
-
-    file1.write("""
+    with open(FileName + "BitMap.mif", "w") as file1:
+        file1.write("""
 --
 -- Generated automatically by BMPConverter.py
 --
@@ -342,39 +399,63 @@ ADDRESS_RADIX = HEX;
 DATA_RADIX = HEX;
 CONTENT BEGIN
 """.format(width*height, bits))
-    digits = ((width*height-1).bit_length()+3)//4
-    for j in range(height):  # for each column
-        for i in range(width):  # For each row
-            file1.write("{}: ".format(hex(j*height+i)[2:].upper().zfill(digits)))
-            if (SingleBitBitMap):
-                #BW
-                if (pixels[i,j] == OneBitPixelCode) :
-                    file1.write('1;\n')
-                    pixels[i, j] = (255, 255, 255)
+        digits = ((width*height-1).bit_length()+3)//4
+        for j in range(height):  # for each column
+            for i in range(width):  # For each row
+                file1.write("{}: ".format(hex(j*height+i)[2:].upper().zfill(digits)))
+                if (SingleBitBitMap):
+                    #BW
+                    if (pixels[i,j] == OneBitPixelCode) :
+                        file1.write('1;\n')
+                        pixels[i, j] = (255, 255, 255)
+                    else:
+                        file1.write('0;\n')
+                        pixels[i, j] = (0, 0, 0)
                 else:
-                    file1.write('0;\n')
-                    pixels[i, j] = (0, 0, 0)
-            else:
-                #R...RG...GB...B (determined by bitsR, bitsG, bitsB)
-                #   ColorByte=int((pixels[i, j][0]/32)+(pixels[i, j][1]/8)+(pixels[i, j][2])) #  sum the three colors to a BYTE
-                red1  =  int(pixels[i,j][0] /(1<<(8-bitsR))) * (1<<(bitsG+bitsB))
-                green1 = int(pixels[i,j][1] /(1<<(8-bitsG))) * (1<<bitsB)
-                blue1 =  int(pixels[i,j][2] /(1<<(8-bitsB))) * 1
+                    #R...RG...GB...B (determined by bitsR, bitsG, bitsB)
+                    #   ColorByte=int((pixels[i, j][0]/32)+(pixels[i, j][1]/8)+(pixels[i, j][2])) #  sum the three colors to a BYTE
+                    red1  =  int(pixels[i,j][0] /(1<<(8-bitsR))) * (1<<(bitsG+bitsB))
+                    green1 = int(pixels[i,j][1] /(1<<(8-bitsG))) * (1<<bitsB)
+                    blue1 =  int(pixels[i,j][2] /(1<<(8-bitsB))) * 1
 
-                ColorByte=  red1 + green1 + blue1  # sum the three colors to a BYTE
-                file1.write(hex(ColorByte)[2:].upper().zfill((bits+3)//4)+";\n") # 4 bits/hex digit, rounded up
-    file1.write("END;\n")
-    xBitsDiv = str( math.trunc(math.log(width +1 )  / math.log( 2 ) ) -2 ) # add one to r0und up math errors  -2  to reach the  4*4
-    yBitsDiv = str( math.trunc(math.log(height +1 )  / math.log( 2 ) ) -2 )
+                    ColorByte=  red1 + green1 + blue1  # sum the three colors to a BYTE
+                    file1.write(hex(ColorByte)[2:].upper().zfill((bits+3)//4)+";\n") # 4 bits/hex digit, rounded up
+        file1.write("END;\n")
 
-    file1.close()
+# ____________________________________________________________________________________________________
+def writeMem():
+    pixels = imgBMP.load()
+    width, height = imgBMP.size
+    OneBitPixelCode = (255, 0, 0)
+    with open(FileName + "BitMap.Mem", "w") as file1:
+        digits = ((width*height-1).bit_length()+3)//4
+        for j in range(height):  # for each column
+            for i in range(width):  # For each row
+                if (SingleBitBitMap):
+                    #BW
+                    if (pixels[i,j] == OneBitPixelCode) :
+                        file1.write('1;\n')
+                        pixels[i, j] = (255, 255, 255)
+                    else:
+                        file1.write('0;\n')
+                        pixels[i, j] = (0, 0, 0)
+                else:
+                    #R...RG...GB...B (determined by bitsR, bitsG, bitsB)
+                    #   ColorByte=int((pixels[i, j][0]/32)+(pixels[i, j][1]/8)+(pixels[i, j][2])) #  sum the three colors to a BYTE
+                    red1  =  int(pixels[i,j][0] /(1<<(8-bitsR))) * (1<<(bitsG+bitsB))
+                    green1 = int(pixels[i,j][1] /(1<<(8-bitsG))) * (1<<bitsB)
+                    blue1 =  int(pixels[i,j][2] /(1<<(8-bitsB))) * 1
 
+                    ColorByte=  red1 + green1 + blue1  # sum the three colors to a BYTE
+                    file1.write(hex(ColorByte)[2:].upper().zfill((bits+3)//4)+"\n") # 4 bits/hex digit, rounded up
 
     # write BMP for additional editing
 
     outJPGFile = open(FileName + "_piexl.jpg", "w")
     imgBMP.save(outJPGFile)
 
+def writeIHex():
+    pass
 
 # --------------------------------------------
 
@@ -460,16 +541,17 @@ def BLURKey():
 ##
 
 # ____________________________________________________________________________________________________
-def open_img():
-    global FileName
+def handle_img_size():
     global imgOriginal, imgFromFile
-    global imgBMP
+    global img1
 
-    path = "smiley.jpg"
-    path = filedialog.askopenfilename( filetypes=[("jpg, bmp", '*.jpg *.bmp'),("all files", '*.*')], title="Choose filename")
+    imageBox = img1.getbbox()
+    if CropFlag and CropFlag.get():
+        cropped = img1.crop(imageBox)
+    else:
+        cropped = img1
+    width, height = cropped.size
 
-    img1 = Image.open(path).convert('RGB')
-    width, height = img1.size
     #print ( width)
     #print ( height)
     Image_ratio_float = width /  height
@@ -502,8 +584,22 @@ def open_img():
 
 
      # create the original image,used for all later conversions
-    imgFromFile = img1.resize(OriginalImageTruncedSize,Image.NEAREST)
+    imgFromFile = cropped.resize(OriginalImageTruncedSize,Image.NEAREST)
     imgOriginal = imgFromFile.resize(imgFromFile.size, Image.NEAREST)
+    return (width, height)
+
+def open_img():
+    global FileName
+    global imgOriginal, imgFromFile
+    global imgBMP
+    global OriginalImageSize
+    global CropFlag
+    global img1
+
+    path = "smiley.jpg"
+    path = filedialog.askopenfilename( filetypes=[("jpg, bmp, png", '*.jpg *.bmp *.png'),("all files", '*.*')], title="Choose filename")
+
+    img1 = Image.open(path).convert('RGB')
 
  #  copy
     # get the bare filename for the verilog file
@@ -512,7 +608,7 @@ def open_img():
     FileName  = pro.split('.')[0]
 
     # create initial original image and print
-
+    (width, height) = handle_img_size()
     img255 = ImageTk.PhotoImage(imgOriginal)
     LeftImage = Label(root, image=img255)
     LeftImage.place(x=Original_Position[0], y=Original_Position[1])
@@ -524,16 +620,21 @@ def open_img():
     OpenGUIKeys()
     BMPpicDisplay()
 
+    OriginalImageSize.config(text="{}x{}".format(width, height))
 
     # ____________________________________________________________________________________________________
 def picModify(v):
     # Split into 3 channels,  pixilize color t o8 bits, pixelize to imgBMP.size 
     global imgBMP, bmpScale
 
-    # resize
+    (width, height) = handle_img_size()
+    global OriginalImageSize
+    OriginalImageSize.config(text="{}x{}".format(width, height))
 
+    # resize
     BMP_ratio = pow(2, bmpScale.get())
-    width, height = imgOriginal.size
+    if not NoResizeFlag or not  NoResizeFlag.get():
+        width, height = imgOriginal.size
     BMP_ratio = min(BMP_ratio,width, height)  #  so it is minmal
     imgBMPsize = (int(width / BMP_ratio) ,int ( height / BMP_ratio ))
 
