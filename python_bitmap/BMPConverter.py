@@ -43,6 +43,9 @@ CropFlag = None
 global NoResizeFlag
 NoResizeFlag = None
 
+global RotateScale
+RotateScale = None
+
 global TL_BMP_Position
 TL_BMP_Position = (500,50)
 Original_Position = (100,50)
@@ -69,7 +72,7 @@ def selectmouse(v):
     if ( TL_BMP_Position[0] < abs_coord_x ) and ((TL_BMP_Position[0] + imgOriginal.size[0]) > abs_coord_x) and (TL_BMP_Position[1] < abs_coord_y) and ((TL_BMP_Position[1] + imgOriginal.size[1] ) > abs_coord_y):
         print("in Right")
 
-        img256 = imgBMP.resize(imgOriginal.size,Image.NEAREST)
+        img256 = imgBMP.resize(imgOriginal.size,Image.Resampling.NEAREST)
         r, g, b = img256.getpixel(cordinate)
         # change pixels on the small imgBMP array
         pixels = imgBMP.load()  # create the pixel map
@@ -113,8 +116,7 @@ def OpenGUIKeys():
     global InvertGrayScalebutton
     global OriginalImageSize
     global TopCrop, BottomCrop
-    global CropFlag
-    global NoResizeFlag
+    global CropFlag, NoResizeFlag, RotateScale
 
     # sliders
     bmpScale = Scale(root, from_=0, to=6, label="2^scale", variable=IntVar(), command=picModify)
@@ -124,6 +126,12 @@ def OpenGUIKeys():
     ResizeScale = Scale(root, from_=0, to=5, label="Mode", variable=IntVar(), command=picModify)
     ResizeScale.set(0)
     ResizeScale.place(x=0, y=250)
+
+    Rotate_Label = Label(root, text="Rotate")
+    Rotate_Label.place(x=5, y=380)
+    RotateScale = Scale(root, from_=0, to=3, label="Rotate", variable=IntVar(), command=picModify)
+    RotateScale.set(0)
+    RotateScale.place(x=0, y=400)
 
     NoResizeFlag = IntVar()
     NoResizeButton = Checkbutton(root, variable=NoResizeFlag, onvalue = 1, offvalue = 0, text="Native Res", command=picModifyNoArgs)
@@ -250,7 +258,7 @@ def OpenGUIKeys():
     NewImagebutton = Button(root, text="New image", bg='light blue', command=open_img)
     NewImagebutton.place(x=50, y=550)
 
-    SVFilebutton = Button(root, text="create SV file & exit", bg='light blue', command=writeVerilog)
+    SVFilebutton = Button(root, text="create SV file", bg='light blue', command=writeVerilog)
     SVFilebutton.place(x=300, y=500)
 
     MIFFilebutton = Button(root, text="create MIF file", bg='light blue', command=writeMif)
@@ -315,7 +323,7 @@ def SingleBitBitMapSelect():
 def BMPpicDisplay():
     # print ("BMPicDisplay")
     #  extend the BMP to the original size and display it
-    img256 = imgBMP.resize(imgOriginal.size,Image.NEAREST)
+    img256 = imgBMP.resize(imgOriginal.size,Image.Resampling.NEAREST)
     img256 = ImageTk.PhotoImage(img256)
     RightImage = Label(root, image=img256)
     RightImage.place (x=TL_BMP_Position[0],y= TL_BMP_Position[1]) # (x=400, y=50)
@@ -375,13 +383,10 @@ def writeVerilog():
     file1.write("};\n")
     file1.close()
 
-
     # write BMP for additional editing
 
     outJPGFile = open(FileName + "_piexl.jpg", "w")
     imgBMP.save(outJPGFile)
-
-    sys.exit()
 
 # ____________________________________________________________________________________________________
 def writeMif():
@@ -402,7 +407,7 @@ CONTENT BEGIN
         digits = ((width*height-1).bit_length()+3)//4
         for j in range(height):  # for each column
             for i in range(width):  # For each row
-                file1.write("{}: ".format(hex(j*height+i)[2:].upper().zfill(digits)))
+                file1.write("{}: ".format(hex(j*width+i)[2:].upper().zfill(digits)))
                 if (SingleBitBitMap):
                     #BW
                     if (pixels[i,j] == OneBitPixelCode) :
@@ -464,7 +469,7 @@ def writeIHex():
 def ResetToOriginal():
     global imgOriginal,Rlambda,Glambda,Blambda
     global Rbits, Gbits, Bbits
-    imgOriginal = imgFromFile.resize(imgOriginal.size, Image.NEAREST)
+    imgOriginal = imgFromFile.resize(imgOriginal.size, Image.Resampling.NEAREST)
 
     Rlambda.set(100)
     Glambda.set(100)
@@ -544,12 +549,20 @@ def BLURKey():
 def handle_img_size():
     global imgOriginal, imgFromFile
     global img1
+    global RotateScale
 
     imageBox = img1.getbbox()
-    if CropFlag and CropFlag.get():
-        cropped = img1.crop(imageBox)
+
+    if RotateScale and RotateScale.get() > 0:
+
+        rotated = img1.transpose((None, Image.Transpose.ROTATE_270, Image.Transpose.ROTATE_180, Image.Transpose.ROTATE_90)[RotateScale.get()])
     else:
-        cropped = img1
+        rotated = img1
+
+    if CropFlag and CropFlag.get():
+        cropped = rotated.crop(imageBox)
+    else:
+        cropped = rotated
     width, height = cropped.size
 
     #print ( width)
@@ -584,8 +597,8 @@ def handle_img_size():
 
 
      # create the original image,used for all later conversions
-    imgFromFile = cropped.resize(OriginalImageTruncedSize,Image.NEAREST)
-    imgOriginal = imgFromFile.resize(imgFromFile.size, Image.NEAREST)
+    imgFromFile = cropped.resize(OriginalImageTruncedSize,Image.Resampling.NEAREST)
+    imgOriginal = imgFromFile.resize(imgFromFile.size, Image.Resampling.NEAREST)
     return (width, height)
 
 def open_img():
@@ -625,11 +638,13 @@ def open_img():
     # ____________________________________________________________________________________________________
 def picModify(v):
     # Split into 3 channels,  pixilize color t o8 bits, pixelize to imgBMP.size 
-    global imgBMP, bmpScale
+    global imgBMP, bmpScale, RotateScale
 
     (width, height) = handle_img_size()
     global OriginalImageSize
     OriginalImageSize.config(text="{}x{}".format(width, height))
+
+    RotateScale.config(label=RotateScale.get()*90)
 
     # resize
     BMP_ratio = pow(2, bmpScale.get())
