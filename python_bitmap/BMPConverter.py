@@ -198,15 +198,15 @@ def OpenGUIKeys():
 
     # Number of bits for RGB
     bitsXpos = 650
-    Rbits = Scale(root, from_=1, to=8, label="            R", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
+    Rbits = Scale(root, from_=0, to=8, label="            R", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
     Rbits.set(8)
     Rbits.place(x=bitsXpos, y=310)
 
-    Gbits = Scale(root, from_=1, to=8, label="            G", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
+    Gbits = Scale(root, from_=0, to=8, label="            G", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
     Gbits.set(8)
     Gbits.place(x=bitsXpos, y=370)
 
-    Bbits = Scale(root, from_=1, to=8, label="            B", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
+    Bbits = Scale(root, from_=0, to=8, label="            B", orient=HORIZONTAL, variable=IntVar(), command=RGBpicModify)
     Bbits.set(8)
     Bbits.place(x=bitsXpos, y=430)
 
@@ -385,8 +385,8 @@ def writeVerilog():
 
     # write BMP for additional editing
 
-    outJPGFile = open(FileName + "_piexl.jpg", "w")
-    imgBMP.save(outJPGFile)
+    outPNGFile = open(FileName + "_pixel.png", "wb")
+    imgBMP.save(outPNGFile)
 
 # ____________________________________________________________________________________________________
 def writeMif():
